@@ -1,12 +1,14 @@
-// src/App.jsx
 import { useState } from 'react';
 import EarthGlobe from './components/EarthGlobe';
 import TimelineSlider from './components/TimelineSlider';
 import InfoPanel from './components/InfoPanel';
 import './App.css';
 
+const START_YEAR = 2001;
+const END_YEAR = 2024; 
+
 export default function App() {
-  const [currentYear, setCurrentYear] = useState(2024);
+  const [currentYear, setCurrentYear] = useState(START_YEAR);
 
   return (
     <div style={{
@@ -17,31 +19,37 @@ export default function App() {
       color: 'white',
       fontFamily: 'sans-serif'
     }}>
-      {/* Header */}
       <header style={{
         textAlign: 'center',
-        padding: '1rem',
+        padding: '0.25rem',
         background: 'rgba(0,0,0,0.6)'
       }}>
-        {/* <h1>🛰️ Terra 25th Anniversary: Land Cover Through Time</h1> */}
-        <p>An interactive 3D visualization using NASA Terra satellite data</p>
+        <h2>🛰️ Terra Land Cover Through Time ({START_YEAR} - {END_YEAR})</h2> 
+        <p><i>An interactive 3D visualization using NASA Terra satellite data</i></p>
       </header>
 
-      {/* Main Content */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {/* 3D Globe — ONLY ONE INSTANCE! */}
-        <div style={{ flex: 3, height: '100%' }}>
-          <EarthGlobe currentYear={currentYear} />
+      <div style={{ display: 'flex', flex: 2, overflow: 'hidden' }}>
+        
+        <div style={{ flex: 8, height: '100%', position: 'relative' }}> 
+          <EarthGlobe 
+            currentYear={currentYear} 
+            startYear={START_YEAR}
+            endYear={END_YEAR}
+          />
         </div>
 
-        {/* Controls */}
         <div style={{
           flex: 1,
           padding: '1.5rem',
           background: 'rgba(15, 23, 42, 0.8)',
           overflowY: 'auto'
         }}>
-          <TimelineSlider year={currentYear} setYear={setCurrentYear} />
+          <TimelineSlider 
+            year={currentYear} 
+            setYear={setCurrentYear} 
+            startYear={START_YEAR} 
+            endYear={END_YEAR}     
+          />
           <InfoPanel year={currentYear} />
         </div>
       </div>

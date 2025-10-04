@@ -1,138 +1,119 @@
-// src/components/EarthGlobe.jsx
-import { useEffect, useRef } from 'react';
+import React, { useRef, Suspense } from 'react';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { OrbitControls, Stars, useTexture, Html } from '@react-three/drei';
 import * as THREE from 'three';
-import { getTextureUrl } from '../utils/textureUrls';
 
-export default function EarthGlobe({ currentYear }) {
-  const mountRef = useRef(null);
-  const globeRef = useRef(null);
+function Earth({ currentYear }) {
+    const earthRef = useRef();
+    const cloudsRef = useRef(); 
+    const earthGroupRef = useRef();
+    
+    const yearString = String(currentYear);
+    
+    const colorMapPath = `/LandCover_Output/land_cover_${yearString}.png`; 
+    const bumpMapPath = `/SurfaceBumpData_HTML/globe_bump_${yearString}.png`; 
+   // const cloudMapPath = `src/assets/clouds_texture.jpg`; 
+    const atmosphereMapPath = `/NASA_Atmosphere_Output/year_average_${yearString}.png`; 
 
-  // Update texture when year changes
-  useEffect(() => {
-    if (!globeRef.current) return;
-    const url = getTextureUrl(currentYear);
-    if (!url) return;
-
-    const loader = new THREE.TextureLoader();
-    loader.load(
-      url,
-      (texture) => {
-        texture.colorSpace = THREE.SRGBColorSpace;
-        globeRef.current.material.map = texture;
-        globeRef.current.material.needsUpdate = true;
-      },
-      undefined,
-      (err) => console.error("Texture load error:", err)
-    );
-  }, [currentYear]);
-
-  // Initialize Three.js scene ONCE
-  useEffect(() => {
-    if (!mountRef.current) return;
-
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x000011);
-
-    const camera = new THREE.PerspectiveCamera(
-      45,
-      mountRef.current.clientWidth / mountRef.current.clientHeight,
-      0.1,
-      1000
-    );
-    camera.position.z = 2.5;
-
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
-    mountRef.current.appendChild(renderer.domElement);
-
-    // Globe
-    const geometry = new THREE.SphereGeometry(1, 64, 64);
-    const material = new THREE.MeshPhongMaterial();
-    const globe = new THREE.Mesh(geometry, material);
-    scene.add(globe);
-    globeRef.current = globe;
-
-    // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
-    scene.add(ambientLight);
-    const sunLight = new THREE.DirectionalLight(0xffffff, 1);
-    sunLight.position.set(5, 3, 5);
-    scene.add(sunLight);
-
-    // Optional: Atmosphere glow
-    const atmosphereGeometry = new THREE.SphereGeometry(1.02, 64, 64);
-    const atmosphereMaterial = new THREE.MeshBasicMaterial({
-      color: 0x3399ff,
-      transparent: true,
-      opacity: 0.15
+    const [colorMap, bumpMap, atmosphereMap] = useTexture([
+        colorMapPath,
+        bumpMapPath,
+        atmosphereMapPath 
+    ], (textures) => {
+        if (textures[1]) {
+            textures[1].colorSpace = THREE.NoColorSpace;
+        }
     });
-    const atmosphere = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
-    scene.add(atmosphere);
 
-    // Controls
-    let isDragging = false;
-    let prevX = 0;
-    let autoRotate = true;
+    useFrame(() => {
+        if (earthRef.current) {
+            earthRef.current.rotation.y += 0.002; 
+        }
+        if (cloudsRef.current) {
+            cloudsRef.current.rotation.y += 0.0025; 
+        }
+    });
 
-    const onMouseDown = (e) => {
-      isDragging = true;
-      prevX = e.clientX;
-      autoRotate = false;
-    };
-    const onMouseMove = (e) => {
-      if (isDragging) {
-        globe.rotation.y += (e.clientX - prevX) * 0.01;
-        prevX = e.clientX;
-      }
-    };
-    const onMouseUp = () => isDragging = false;
-    const onWheel = (e) => {
-      camera.position.z += e.deltaY * 0.002;
-      camera.position.z = Math.max(1.5, Math.min(5, camera.position.z));
+    const getMaterialProps = (map, bump = false) => {
+        if (!map) return {};
+        
+        return bump ? { bumpMap: map } : { map: map };
     };
 
-    renderer.domElement.addEventListener('mousedown', onMouseDown);
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-    renderer.domElement.addEventListener('wheel', onWheel);
+    return (
+        <group ref={earthGroupRef} rotation-z={23.4 * Math.PI / 180}>
+            
+            <mesh ref={earthRef} position={[0, 0, 0]}>
+                <sphereGeometry args={[2, 64, 64]} /> 
+                <meshStandardMaterial 
+                    color={0xFFFFFF} 
+                    {...getMaterialProps(colorMap)}
+                    {...getMaterialProps(bumpMap, true)}
+                    bumpScale={150} 
+                />
+            </mesh>
+            
+            
+            {/* <mesh ref={cloudsRef} position={[0, 0, 0]} scale={2.003}> 
+                <sphereGeometry args={[1, 64, 64]} />
+                <meshPhongMaterial 
+                    {...getMaterialProps(atmosphereMap)}
+                    transparent={true} 
+                    opacity={0.1}
+                    depthWrite={true} 
+                />
+            </mesh> */}
 
-    // Animation loop
-    const animate = () => {
-      requestAnimationFrame(animate);
-      if (!isDragging && autoRotate) {
-        globe.rotation.y += 0.001;
-      }
-      renderer.render(scene, camera);
-    };
-    animate();
+            <mesh ref={cloudsRef} position={[0, 0, 0]} scale={2.05}>
+                <sphereGeometry args={[1, 64, 64]} />
+                <meshPhongMaterial
+                    {...getMaterialProps(atmosphereMap)}
+                    transparent={true}
+                    opacity={0.70}
+                    side={THREE.BackSide} 
+                />
+            </mesh>
+            
+        </group>
+    );
+}
 
-    // Handle resize
-    const handleResize = () => {
-      if (!mountRef.current) return;
-      camera.aspect = mountRef.current.clientWidth / mountRef.current.clientHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
-    };
-    window.addEventListener('resize', handleResize);
-
-    // Cleanup
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-      if (renderer.domElement) {
-        renderer.domElement.removeEventListener('mousedown', onMouseDown);
-        renderer.domElement.removeEventListener('wheel', onWheel);
-      }
-      if (mountRef.current && renderer.domElement) {
-        mountRef.current.removeChild(renderer.domElement);
-      }
-      geometry.dispose();
-      material.dispose();
-      renderer.dispose();
-    };
-  }, []);
-
-  return <div ref={mountRef} style={{ width: '100%', height: '100%' }} />;
+export default function EarthGlobe({ currentYear, startYear, endYear }) {
+    const earthOrbitRef = useRef(); 
+    
+    return (
+        <Canvas 
+            camera={{ position: [5, 2, 8], fov: 50 }} 
+            style={{ background: '#000000' }}
+        >
+            <Suspense fallback={<Html center className="text-white">Loading Terra Data...</Html>}>
+                
+                <directionalLight 
+                    position={[-9, 0, 0]} 
+                    intensity={5}        
+                    color={0xffffee} 
+                />
+                <ambientLight intensity={0.45} /> 
+                
+                <group ref={earthOrbitRef} position={[4, 0, 0]}>
+                    <Earth currentYear={currentYear} />
+                    
+                    {/*   MOON  */}
+                    {/* SATELLITE  */}
+                </group>
+                
+                <Stars radius={150} depth={80} count={10000} factor={6} saturation={0.5} fade speed={1.5} />
+                
+                <OrbitControls 
+                    enableZoom={true} 
+                    enablePan={false} 
+                    maxDistance={20}
+                    minDistance={3}
+                    enableDamping={true} 
+                    dampingFactor={0.05} 
+                />
+                
+            </Suspense>
+        </Canvas>
+    );
 }
