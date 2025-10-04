@@ -1,7 +1,136 @@
 import React, { useRef, Suspense } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Stars, useTexture, Html } from '@react-three/drei';
+import { OrbitControls, Stars, useTexture, Html,useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
+
+const AU_DISTANCE = 15; 
+const ORBIT_ECCENTRICITY = 1.35;
+const ORBIT_TILT_Z = 15 * Math.PI / 180;
+const SUN_SIZE = 4;
+const EARTH_SIZE = 2;
+const MOON_SIZE = 0.5;
+const SATELLITE_SIZE = 0.00005;
+const SATELLITE_DISTANCE = 2.8;
+const MOON_DISTANCE = 3.5; 
+const EARTH_ORBIT_SPEED = 0.05; 
+const MOON_ORBIT_SPEED = 0.5;
+const SUN_ROTATION_SPEED = 0.003;
+const SATELLITE_ORBIT_SPEED = 1.5; 
+const SUN_SHIFT_X = -3; 
+const SUN_COLOR_PATH = `/8k_sun_texture.jpg`;
+const MOON_COLOR_PATH = `/8k_moon_textures.jpg`;
+const SATELLITE_MODEL_PATH = `/Terra.glb`; 
+//const SUN_BUMP_PATH = "/textures/sun_bump.jpg";
+
+function OrbitLine() {
+    return (
+        <mesh rotation-x={Math.PI / 2}
+            scale={[ORBIT_ECCENTRICITY, 1, 1]}> 
+            <ringGeometry args={[AU_DISTANCE - 0.05, AU_DISTANCE + 0.05, 128]} />
+            <meshBasicMaterial color={0x333333} side={THREE.DoubleSide} />
+        </mesh>
+    );
+}
+
+function Sun() {
+    const sunRef = useRef(); 
+    const [colorMap] = useTexture([SUN_COLOR_PATH]);
+    
+     useFrame(() => {
+        if (sunRef.current) {
+            sunRef.current.rotation.y += SUN_ROTATION_SPEED;
+        }
+    });
+
+    return (
+        <group ref={sunRef} position={[SUN_SHIFT_X, 0, 0]}> 
+            <mesh>
+                <sphereGeometry args={[SUN_SIZE, 64, 64]} />
+                <meshStandardMaterial
+                    emissiveMap={colorMap}  
+                    color={0x000000} 
+                    emissive={0xFFFFFF} 
+                    emissiveIntensity={3.5} 
+                />
+            </mesh>
+            
+            {/* NEW: Main light source for the system (Sun's light) */}
+            <pointLight 
+                intensity={10} 
+                distance={1000}
+                color={0xffffff} 
+                decay={0.01} 
+            />
+        </group>
+    );
+}
+
+function Moon() {
+    const moonRef = useRef();
+    const [colorMap] = useTexture([MOON_COLOR_PATH]);
+
+    useFrame(() => {
+        if (moonRef.current) {
+            moonRef.current.rotation.y += 0.005; 
+        }
+    });
+
+    return (
+        <mesh ref={moonRef} position={[0, 0, 0]}>
+            <sphereGeometry args={[MOON_SIZE, 32, 32]} />
+            <meshStandardMaterial
+                map={colorMap}
+                color={0xFFFFFF}
+            />
+        </mesh>
+    );
+}
+
+
+function MoonOrbitAnimator() {
+    const moonOrbitRef = useRef();
+    
+    useFrame(({ clock }) => {
+        if (moonOrbitRef.current) {
+            moonOrbitRef.current.rotation.y = clock.getElapsedTime() * MOON_ORBIT_SPEED;
+        }
+    });
+
+    return (
+        <group ref={moonOrbitRef}>
+            <group position={[MOON_DISTANCE, 0, 0]}>
+                <Moon />
+            </group>
+        </group>
+    );
+}
+
+function Satellite() {
+    const { scene } = useGLTF(SATELLITE_MODEL_PATH); 
+    
+    return (
+        <primitive object={scene} scale={SATELLITE_SIZE} />
+    );
+}
+
+function SatelliteOrbitAnimator() {
+    const satelliteOrbitRef = useRef();
+    
+    useFrame(({ clock }) => {
+        if (satelliteOrbitRef.current) {
+            satelliteOrbitRef.current.rotation.y = clock.getElapsedTime() * SATELLITE_ORBIT_SPEED;
+        }
+    });
+
+    return (
+        <group ref={satelliteOrbitRef}>
+            <group position={[SATELLITE_DISTANCE, 0, 0]} rotation-x={-Math.PI / 4}>
+                <Satellite />
+            </group>
+        </group>
+    );
+}
+
 
 function Earth({ currentYear }) {
     const earthRef = useRef();
@@ -27,7 +156,7 @@ function Earth({ currentYear }) {
 
     useFrame(() => {
         if (earthRef.current) {
-            earthRef.current.rotation.y += 0.002; 
+            earthRef.current.rotation.y += 0.02; 
         }
         if (cloudsRef.current) {
             cloudsRef.current.rotation.y += 0.0025; 
@@ -41,19 +170,19 @@ function Earth({ currentYear }) {
     };
 
     return (
-        <group ref={earthGroupRef} rotation-z={23.4 * Math.PI / 180}>
+        <group ref={earthGroupRef} rotation-z={-23.5 * Math.PI / 180}>
             
             <mesh ref={earthRef} position={[0, 0, 0]}>
-                <sphereGeometry args={[2, 64, 64]} /> 
+                <sphereGeometry args={[EARTH_SIZE, 64, 64]} /> 
                 <meshStandardMaterial 
                     color={0xFFFFFF} 
                     {...getMaterialProps(colorMap)}
                     {...getMaterialProps(bumpMap, true)}
-                    bumpScale={150} 
+                    bumpScale={10} 
                 />
             </mesh>
             
-            
+
             {/* <mesh ref={cloudsRef} position={[0, 0, 0]} scale={2.003}> 
                 <sphereGeometry args={[1, 64, 64]} />
                 <meshPhongMaterial 
@@ -69,46 +198,88 @@ function Earth({ currentYear }) {
                 <meshPhongMaterial
                     {...getMaterialProps(atmosphereMap)}
                     transparent={true}
-                    opacity={0.70}
+                    opacity={0.65}
                     side={THREE.BackSide} 
+                    blending={THREE.AdditiveBlending}
                 />
             </mesh>
-            
+            <MoonOrbitAnimator />
+            <SatelliteOrbitAnimator /> 
+
         </group>
     );
 }
 
+function EarthOrbitAnimator({ currentYear }) {
+    const earthOrbitRef = useRef(); 
+    
+    useFrame(({ clock }) => {
+        if (earthOrbitRef.current) {
+          const t = clock.getElapsedTime() * EARTH_ORBIT_SPEED;
+            
+            const x = AU_DISTANCE * ORBIT_ECCENTRICITY * Math.cos(t);
+            const z = AU_DISTANCE * Math.sin(t);
+
+            earthOrbitRef.current.position.x = x;
+            earthOrbitRef.current.position.z = z;
+        }
+    });
+
+    return (
+        <group ref={earthOrbitRef}>
+            <group position={[0, 0, 0]}> 
+                <Earth currentYear={currentYear} />
+                {/* SATELLITE  */}
+            </group>
+        </group>
+    );
+}
+
+
 export default function EarthGlobe({ currentYear, startYear, endYear }) {
     const earthOrbitRef = useRef(); 
+    //  useFrame(({ clock }) => {
+    //     if (earthOrbitRef.current) {
+    //         earthOrbitRef.current.rotation.y = clock.getElapsedTime() * EARTH_ORBIT_SPEED;
+    //     }
+    // });
     
     return (
         <Canvas 
-            camera={{ position: [5, 2, 8], fov: 50 }} 
+            camera={{ position: [AU_DISTANCE + SUN_SHIFT_X + 1,2,5], fov: 50 }} 
             style={{ background: '#000000' }}
         >
-            <Suspense fallback={<Html center className="text-white">Loading Terra Data...</Html>}>
+            <Suspense fallback={<Html center className="text-white">Loading Solar System Data...</Html>}>
                 
-                <directionalLight 
+                {/* <directionalLight 
                     position={[-9, 0, 0]} 
                     intensity={5}        
                     color={0xffffee} 
-                />
-                <ambientLight intensity={0.45} /> 
+                /> */}
+                <Sun />
+                 <group rotation-z={ORBIT_TILT_Z}>
+                 
+                <OrbitLine />
+
+                <EarthOrbitAnimator currentYear={currentYear} />
+                 </group>
+            
+                <ambientLight intensity={0.05} />
+
+                {/* <group ref={earthOrbitRef}>
+                    <group position={[AU_DISTANCE, 0, 0]}>
+                        <Earth currentYear={currentYear} />
+                        {/*   MOON  
+                        {/* SATELLITE  
+                    </group>
+                </group> */}
                 
-                <group ref={earthOrbitRef} position={[4, 0, 0]}>
-                    <Earth currentYear={currentYear} />
-                    
-                    {/*   MOON  */}
-                    {/* SATELLITE  */}
-                </group>
-                
-                <Stars radius={150} depth={80} count={10000} factor={6} saturation={0.5} fade speed={1.5} />
-                
+                <Stars radius={200} depth={100} count={10000} factor={8} saturation={0.8} fade speed={1.5} />                 
                 <OrbitControls 
                     enableZoom={true} 
                     enablePan={false} 
-                    maxDistance={20}
-                    minDistance={3}
+                    maxDistance={AU_DISTANCE + 25}
+                    minDistance={2}
                     enableDamping={true} 
                     dampingFactor={0.05} 
                 />
